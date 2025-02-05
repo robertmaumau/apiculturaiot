@@ -1,0 +1,52 @@
+// Se toma el payload del mensaje recibido, que contiene datos de sensores y otros valores
+var str = msg.payload;
+// Se divide el string del payload en partes utilizando '&' como delimitador
+var parts = str.split("&");
+
+// Asignación de cada parte del array a variables específicas
+var Id_0x = parts[0]; // Identificador de la colmena
+var Ds18b20 = parseFloat(parts[1]); // Temperatura desde sensor DS18B20
+var Hx711 = parseFloat(parts[2]); // Valor del sensor de peso HX711
+var TmpAm2301 = parseFloat(parts[3]); // Temperatura desde sensor DHT AM2301
+var HmdAm2301 = parseFloat(parts[4]); // Humedad desde sensor DHT AM2301
+var FechaRtc = parts[5]; // Fecha y hora desde el RTC
+
+// Definición de valores iniciales y finales para la calibración del sensor HX711
+var peso_init = 0; // Peso inicial en gramos
+var peso_fin = 12000; // Peso final en gramos
+var val_init = -5818; // Valor inicial del sensor HX711 para el peso inicial
+var val_fin = 4378; // Valor final del sensor HX711 para el peso final
+
+// Cálculo de la pendiente (m) para la relación lineal peso-valor del sensor
+var m = (peso_fin - peso_init) / (val_fin - val_init);
+
+// Cálculo de la intersección (b) con el eje Y para la fórmula de la línea recta
+var b = peso_init - (m * val_init);
+
+// Cálculo del peso actual basado en la lectura actual del sensor HX711
+var peso_val = m * Hx711 + b;
+// Conversión del peso de gramos a kilogramos
+peso_val = peso_val / 1000;
+
+// Si el peso calculado es menor que cero, se ajusta a cero
+if (peso_val < 0.09) {
+    peso_val = 0;
+}
+
+// Convertir los datos procesados a un objeto JSON para su manejo
+try {
+    // Verificar si el identificador corresponde a la colmena 1
+    if (Id_0x !== "Id_01") {
+        // Si no es la colmena 1, no hacer nada y retornar null
+        return null;
+    }
+
+    // Construir la consulta SQL para insertar los datos en la base de datos
+    msg.topic = "INSERT INTO colmena_01 (`temp_ds18`, `peso_hx71`, `temp_am23`, `humd_am23`, `fecha_rtc`) VALUES ('" + Ds18b20 + "', '" + peso_val + "', '" + TmpAm2301 + "', '" + HmdAm2301 + "', '" + FechaRtc + "')";
+} catch (e) {
+    // Captura de cualquier error durante la conversión y formateo de datos
+    msg.payload = { "error": "Invalid JSON format" };
+}
+
+// Devolver el mensaje modificado para ser procesado por el siguiente nodo en el flujo
+return msg;
